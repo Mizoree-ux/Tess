@@ -1,55 +1,189 @@
+
+-- DEEXZY HUB | GROWBLOX
+-- Hit Counter GUI
+-- LocalScript
+
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local player = Players.LocalPlayer
 
-local remote = Instance.new("RemoteEvent")
-remote.Name = "AutoFarmEvent"
-remote.Parent = ReplicatedStorage
+local totalHits = 0
+local blockHits = 0
+local brokenBlocks = 0
+local targetHits = 5
 
-local dirtFolder = workspace:WaitForChild("DirtBlocks")
+local gui = Instance.new("ScreenGui")
+gui.Name = "DeexzyHub"
+gui.ResetOnSpawn = false
+gui.Parent = player:WaitForChild("PlayerGui")
 
-local active = {}
+local main = Instance.new("Frame")
+main.Size = UDim2.fromOffset(300, 360)
+main.Position = UDim2.new(0.5, -150, 0.5, -180)
+main.BackgroundColor3 = Color3.fromRGB(20, 23, 32)
+main.BorderSizePixel = 0
+main.Active = true
+main.Draggable = true
+main.Parent = gui
 
-local function findNearestDirt(player)
-    local character = player.Character
-    if not character then return nil end
+Instance.new("UICorner", main).CornerRadius =
+    UDim.new(0, 12)
 
-    local root = character:FindFirstChild("HumanoidRootPart")
-    if not root then return nil end
+local outline = Instance.new("UIStroke")
+outline.Color = Color3.fromRGB(40, 145, 255)
+outline.Thickness = 1.5
+outline.Parent = main
 
-    local nearest = nil
-    local distance = 20
-
-    for _, block in ipairs(dirtFolder:GetChildren()) do
-        if block:IsA("BasePart") then
-            local d = (root.Position - block.Position).Magnitude
-
-            if d < distance then
-                distance = d
-                nearest = block
-            end
-        end
-    end
-
-    return nearest
+local function createLabel(text, position, size)
+    local label = Instance.new("TextLabel")
+    label.Size = size
+    label.Position = position
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = Color3.new(1, 1, 1)
+    label.TextSize = 15
+    label.Font = Enum.Font.GothamBold
+    label.Parent = main
+    return label
 end
 
-remote.OnServerEvent:Connect(function(player, enabled)
-    if typeof(enabled) ~= "boolean" then return end
-    active[player] = enabled
-end)
+local function createButton(text, position, size, color)
+    local button = Instance.new("TextButton")
+    button.Size = size
+    button.Position = position
+    button.Text = text
+    button.TextColor3 = Color3.new(1, 1, 1)
+    button.TextSize = 13
+    button.Font = Enum.Font.GothamBold
+    button.BackgroundColor3 = color
+    button.Parent = main
 
-Players.PlayerRemoving:Connect(function(player)
-    active[player] = nil
-end)
+    Instance.new("UICorner", button).CornerRadius =
+        UDim.new(0, 7)
 
-while task.wait(0.5) do
-    for player, enabled in pairs(active) do
-        if enabled then
-            local block = findNearestDirt(player)
+    return button
+end
 
-            if block then
-                block:Destroy()
-            end
-        end
+createLabel(
+    "DEEXZY HUB",
+    UDim2.fromOffset(15, 10),
+    UDim2.fromOffset(200, 30)
+)
+
+createLabel(
+    "GROWBLOX | HIT DETECTION",
+    UDim2.fromOffset(15, 42),
+    UDim2.fromOffset(260, 20)
+)
+
+local totalLabel = createLabel(
+    "TOTAL HITS: 0",
+    UDim2.fromOffset(15, 85),
+    UDim2.fromOffset(270, 25)
+)
+
+local blockLabel = createLabel(
+    "BLOCK HITS: 0 / 5",
+    UDim2.fromOffset(15, 115),
+    UDim2.fromOffset(270, 25)
+)
+
+local brokenLabel = createLabel(
+    "BLOCKS BROKEN: 0",
+    UDim2.fromOffset(15, 145),
+    UDim2.fromOffset(270, 25)
+)
+
+local statusLabel = createLabel(
+    "STATUS: READY",
+    UDim2.fromOffset(15, 175),
+    UDim2.fromOffset(270, 25)
+)
+
+statusLabel.TextColor3 =
+    Color3.fromRGB(80, 220, 140)
+
+local function update()
+    totalLabel.Text = "TOTAL HITS: " .. totalHits
+
+    blockLabel.Text =
+        "BLOCK HITS: " .. blockHits .. " / " .. targetHits
+
+    brokenLabel.Text =
+        "BLOCKS BROKEN: " .. brokenBlocks
+
+    if blockHits >= targetHits then
+        statusLabel.Text = "TARGET REACHED"
+        statusLabel.TextColor3 =
+            Color3.fromRGB(80, 220, 140)
+    else
+        statusLabel.Text = "STATUS: RECORDING"
+        statusLabel.TextColor3 =
+            Color3.fromRGB(80, 180, 255)
     end
 end
+
+local hitButton = createButton(
+    "+ RECORD HIT",
+    UDim2.fromOffset(15, 215),
+    UDim2.fromOffset(270, 38),
+    Color3.fromRGB(30, 120, 210)
+)
+
+hitButton.Activated:Connect(function()
+    totalHits += 1
+    blockHits += 1
+    update()
+end)
+
+local brokenButton = createButton(
+    "BLOCK BROKEN",
+    UDim2.fromOffset(15, 260),
+    UDim2.fromOffset(130, 35),
+    Color3.fromRGB(0, 145, 85)
+)
+
+brokenButton.Activated:Connect(function()
+    if blockHits > 0 then
+        brokenBlocks += 1
+        blockHits = 0
+        update()
+    end
+end)
+
+local resetButton = createButton(
+    "RESET",
+    UDim2.fromOffset(155, 260),
+    UDim2.fromOffset(130, 35),
+    Color3.fromRGB(160, 55, 55)
+)
+
+resetButton.Activated:Connect(function()
+    totalHits = 0
+    blockHits = 0
+    brokenBlocks = 0
+    update()
+end)
+
+local targetButton = createButton(
+    "TARGET: 5 HITS",
+    UDim2.fromOffset(15, 305),
+    UDim2.fromOffset(270, 35),
+    Color3.fromRGB(65, 70, 90)
+)
+
+local targets = {3, 5, 10}
+local targetIndex = 2
+
+targetButton.Activated:Connect(function()
+    targetIndex = targetIndex % #targets + 1
+    targetHits = targets[targetIndex]
+
+    targetButton.Text =
+        "TARGET: " .. targetHits .. " HITS"
+
+    update()
+end)
+
+update()
+
+print("DEEXZY HUB Loaded")
