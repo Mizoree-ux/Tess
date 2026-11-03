@@ -1,40 +1,524 @@
--- DEEXZY HUB | Auto Warp Framework
--- LocalScript
+
+-- Growtopia-style AutoFarm for Roblox
+-- ServerScriptService/FarmSystem
 
 local Players = game:GetService("Players")
-local player = Players.LocalPlayer
+local ServerStorage = game:GetService("ServerStorage")
+local Workspace = game:GetService("Workspace")
 
-local running = false
+local World = Workspace:WaitForChild("World")
+local Tiles = World:WaitForChild("Tiles")
+local Drops = World:WaitForChild("Drops")
+local Templates = ServerStorage:WaitForChild("TileTemplates")
 
-local characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+-- CONFIG
+local WORLD_WIDTH = 100
+local WORLD_HEIGHT = 60
+local TILE_SIZE = 32
 
-local function randomWorldName()
-    local result = ""
+local MAX_PLAYERS = 1
+local GROW_TIME = 30
+local INVENTORY_LIMIT = 200
+local FARM_ROW = 23
+local WORLD_BOTTOM = 54
 
-    for i = 1, 4 do
-        local index = math.random(1, #characters)
-        result ..= characters:sub(index, index)
-    end
+local AUTO_START = true
 
-    return result
+local DROP_LIST = {
+    "Dirt", "DirtSeed",
+    "CaveBackground", "CaveBackgroundSeed",
+    "Lava", "LavaSeed",
+    "Rock", "RockSeed",
+}
+
+local TRASH_LIST = table.clone(DROP_LIST)
+
+-- STATE
+local tileMap = {}
+local inventories = {}
+local running = {}
+local busy = {}
+
+-- UTILITY
+local function log(message)
+    print("[AutoFarm] " .. message)
 end
 
-local function autoWarp()
-    while running do
-        local worldName = randomWorldName()
+local function tileKey(x, y)
+    return tostring(x) .. ":" .. tostring(y)
+end
 
-        print("Mencoba warp ke:", worldName)
+local function getTile(x, y)
+    return tileMap[tileKey(x, y)]
+end
 
-        -- Hubungkan ke API teleport resmi Growblox
-        -- setelah pemilik game memberikan dokumentasinya.
+local function getXY(tile)
+    return tile:GetAttribute("TileX"), tile:GetAttribute("TileY")
+end
 
-        task.wait(3)
+local function getTileType(tile)
+    return tile:GetAttribute("TileType") or tile.Name
+end
+
+local function isEmpty(tile)
+    return tile == nil or not tile.Parent
+end
+
+local function isSolid(tile)
+    if isEmpty(tile) then
+        return false
+    end
+
+    return tile:GetAttribute("Solid") ~= false
+end
+
+local function getInventory(player)
+    if not inventories[player] then
+        inventories[player] = {
+            Dirt = 0,
+            DirtSeed = 10,
+            WoodenPlatform = 100,
+            Lava = 0,
+            LavaSeed = 0,
+            CaveBackground = 0,
+            CaveBackgroundSeed = 0,
+            Rock = 0,
+            RockSeed = 0,
+        }
+    end
+
+    return inventories[player]
+end
+
+local function getAmount(player, item)
+    return getInventory(player)[item] or 0
+end
+
+local function addItem(player, item, amount)
+    local inv = getInventory(player)
+    inv[item] = (inv[item] or 0) + amount
+end
+
+local function removeItem(player, item, amount)
+    local inv = getInventory(player)
+
+    if (inv[item] or 0) < amount then
+        return false
+    end
+
+    inv[item] -= amount
+    return true
+end
+
+local function updateTileMap()
+    table.clear(tileMap)
+
+    for _, tile in ipairs(Tiles:GetChildren()) do
+        if tile:IsA("BasePart") then
+            local x = tile:GetAttribute("TileX")
+            local y = tile:GetAttribute("TileY")
+
+            if x ~= nil and y ~= nil then
+                tileMap[tileKey(x, y)] = tile
+            end
+        end
     end
 end
 
--- Mulai
-running = true
-task.spawn(autoWarp)
+local function getCharacter(player)
+    local character = player.Character
+    if not character then
+        return nil
+    end
 
--- Untuk menghentikan:
--- running = false
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local root = character:FindFirstChild("HumanoidRootPart")
+
+    if not humanoid or not root then
+        return nil
+    end
+
+    return character, humanoid, root
+end
+
+local function tilePosition(x, y)
+    return Vector3.new(
+        x * TILE_SIZE + TILE_SIZE / 2,
+        y * TILE_SIZE + TILE_SIZE / 2,
+        0
+    )
+end
+
+local function moveToTile(player, x, y)
+    local _, humanoid, root = getCharacter(player)
+
+    if not humanoid or not root then
+        return false
+    end
+
+    local target = tilePosition(x, y)
+    humanoid:MoveTo(target)
+
+    local timeout = 0
+    repeat
+        task.wait(0.1)
+        timeout += 0.1
+
+        if not running[player] then
+            return false
+        end
+    until (root.Position - target).Magnitude <= TILE_SIZE
+        or timeout >= 5
+
+    return true
+end
+
+local function createDrop(item, amount, position)
+    local drop = Instance.new("Part")
+    drop.Name = item
+    drop.Size = Vector3.new(1.5, 1.5, 1.5)
+    drop.Position = position + Vector3.new(0, 2, 0)
+    drop.Anchored = false
+    drop.CanCollide = true
+    drop:SetAttribute("Item", item)
+    drop:SetAttribute("Amount", amount)
+    drop.Parent = Drops
+
+    return drop
+end
+
+local function collectDrops(player)
+    local _, _, root = getCharacter(player)
+    if not root then
+        return
+    end
+
+    for _, drop in ipairs(Drops:GetChildren()) do
+        if drop:IsA("BasePart") then
+            local distance = (root.Position - drop.Position).Magnitude
+
+            if distance <= TILE_SIZE * 2 then
+                local item = drop:GetAttribute("Item") or drop.Name
+                local amount = drop:GetAttribute("Amount") or 1
+
+                addItem(player, item, amount)
+                drop:Destroy()
+            end
+        end
+    end
+end
+
+local function breakTile(player, x, y)
+    local tile = getTile(x, y)
+
+    if isEmpty(tile) then
+        return false
+    end
+
+    if not moveToTile(player, x, y) then
+        return false
+    end
+
+    local item = getTileType(tile)
+    local position = tile.Position
+
+    tileMap[tileKey(x, y)] = nil
+    tile:Destroy()
+
+    createDrop(item, 1, position)
+    collectDrops(player)
+
+    return true
+end
+
+local function placeTile(player, x, y, item)
+    if not isEmpty(getTile(x, y)) then
+        return false
+    end
+
+    local template = Templates:FindFirstChild(item)
+    if not template or not template:IsA("BasePart") then
+        warn("Missing tile template: " .. item)
+        return false
+    end
+
+    if not removeItem(player, item, 1) then
+        return false
+    end
+
+    local tile = template:Clone()
+    tile.Name = item
+    tile:SetAttribute("TileType", item)
+    tile:SetAttribute("TileX", x)
+    tile:SetAttribute("TileY", y)
+    tile.Position = tilePosition(x, y)
+    tile.Parent = Tiles
+
+    tileMap[tileKey(x, y)] = tile
+
+    return true
+end
+
+local function isGroundedTile(x, y)
+    local below = getTile(x, y + 1)
+    return isSolid(below)
+end
+
+local function plant(player, x, y)
+    local tile = getTile(x, y)
+
+    if not isEmpty(tile) then
+        return false
+    end
+
+    if not isGroundedTile(x, y) then
+        return false
+    end
+
+    if not removeItem(player, "DirtSeed", 1) then
+        return false
+    end
+
+    local seed = Templates:FindFirstChild("DirtSeed")
+    if not seed then
+        addItem(player, "DirtSeed", 1)
+        return false
+    end
+
+    local crop = seed:Clone()
+    crop.Name = "DirtSeed"
+    crop:SetAttribute("TileType", "DirtSeed")
+    crop:SetAttribute("TileX", x)
+    crop:SetAttribute("TileY", y)
+    crop:SetAttribute("ReadyAt", os.time() + GROW_TIME)
+    crop.Position = tilePosition(x, y)
+    crop.Parent = Tiles
+
+    tileMap[tileKey(x, y)] = crop
+    return true
+end
+
+local function harvest(player, x, y)
+    local tile = getTile(x, y)
+
+    if isEmpty(tile) or getTileType(tile) ~= "DirtSeed" then
+        return false
+    end
+
+    local readyAt = tile:GetAttribute("ReadyAt") or 0
+
+    if os.time() < readyAt then
+        return false
+    end
+
+    local position = tile.Position
+
+    tileMap[tileKey(x, y)] = nil
+    tile:Destroy()
+
+    addItem(player, "Dirt", 1)
+    addItem(player, "DirtSeed", 1)
+
+    createDrop("Dirt", 1, position)
+    collectDrops(player)
+
+    return true
+end
+
+local function dropExcess(player)
+    for _, item in ipairs(DROP_LIST) do
+        local amount = getAmount(player, item)
+
+        if amount >= INVENTORY_LIMIT then
+            local dropAmount = amount - 100
+
+            if removeItem(player, item, dropAmount) then
+                local _, _, root = getCharacter(player)
+
+                if root then
+                    createDrop(item, dropAmount, root.Position)
+                end
+            end
+        end
+    end
+end
+
+local function trashExcess(player, amount)
+    for _, item in ipairs(TRASH_LIST) do
+        local count = getAmount(player, item)
+
+        if count >= amount then
+            removeItem(player, item, count)
+        end
+    end
+end
+
+-- WORLD OPERATIONS
+local function clearSide(player, minX, maxX)
+    for y = 0, WORLD_BOTTOM - 1 do
+        for x = minX, maxX do
+            local tile = getTile(x, y)
+
+            if not isEmpty(tile) then
+                breakTile(player, x, y)
+            end
+        end
+    end
+end
+
+local function placePlatforms(player, x)
+    for y = 3, WORLD_BOTTOM - 1 do
+        if isEmpty(getTile(x, y)) and isSolid(getTile(x, y + 1)) then
+            placeTile(player, x, y, "WoodenPlatform")
+        end
+    end
+end
+
+local function clearCaveBackground(player)
+    for y = 0, WORLD_BOTTOM - 1 do
+        for x = 2, 97 do
+            local tile = getTile(x, y)
+
+            if not isEmpty(tile)
+                and getTileType(tile) == "CaveBackground"
+                and getTileType(getTile(x, y + 1)) == "CaveBackground"
+            then
+                breakTile(player, x, y + 1)
+            end
+        end
+    end
+end
+
+local function replaceLava(player)
+    for y = 45, WORLD_BOTTOM - 1 do
+        for x = 1, 97 do
+            local tile = getTile(x, y)
+
+            if not isEmpty(tile) and getTileType(tile) == "Lava" then
+                breakTile(player, x, y)
+                placeTile(player, x, y, "Dirt")
+            end
+        end
+    end
+end
+
+local function gatherDirt(player)
+    for y = FARM_ROW, WORLD_BOTTOM - 1 do
+        for x = 2, 97 do
+            local tile = getTile(x, y)
+
+            if not isEmpty(tile)
+                and getTileType(tile) == "Dirt"
+                and getAmount(player, "Dirt") < INVENTORY_LIMIT
+            then
+                breakTile(player, x, y)
+            end
+        end
+    end
+end
+
+local function plantAndHarvest(player)
+    for y = FARM_ROW, WORLD_BOTTOM - 1 do
+        for x = 2, 97 do
+            if getAmount(player, "DirtSeed") > 0 then
+                plant(player, x, y)
+            end
+
+            harvest(player, x, y)
+        end
+    end
+end
+
+local function makeDirtRows(player)
+    for y = FARM_ROW, WORLD_BOTTOM - 1 do
+        for x = 1, 97 do
+            if isEmpty(getTile(x, y)) and isSolid(getTile(x, y + 1)) then
+                if getAmount(player, "Dirt") > 0 then
+                    placeTile(player, x, y, "Dirt")
+                end
+            end
+        end
+    end
+end
+
+-- MAIN LOOP
+local function runFarm(player)
+    if busy[player] then
+        return
+    end
+
+    busy[player] = true
+    running[player] = true
+
+    log("Starting farm for " .. player.Name)
+
+    while running[player] and player.Parent do
+        updateTileMap()
+
+        if #Players:GetPlayers() <= MAX_PLAYERS then
+            log("Clearing left side")
+            clearSide(player, 0, 1)
+
+            log("Placing left platforms")
+            if getAmount(player, "WoodenPlatform") >= 26 then
+                placePlatforms(player, 1)
+            end
+
+            log("Clearing right side")
+            clearSide(player, 98, 99)
+
+            log("Placing right platforms")
+            if getAmount(player, "WoodenPlatform") >= 26 then
+                placePlatforms(player, 98)
+            end
+
+            log("Clearing cave background")
+            clearCaveBackground(player)
+
+            log("Replacing lava")
+            replaceLava(player)
+
+            log("Gathering dirt")
+            gatherDirt(player)
+
+            log("Planting and harvesting")
+            plantAndHarvest(player)
+
+            log("Making dirt rows")
+            makeDirtRows(player)
+
+            log("Collecting and managing items")
+            collectDrops(player)
+            dropExcess(player)
+            trashExcess(player, 200)
+
+            task.wait(1)
+        else
+            log("Too many players; waiting")
+            task.wait(10)
+        end
+    end
+
+    busy[player] = nil
+    log("Farm stopped for " .. player.Name)
+end
+
+Players.PlayerAdded:Connect(function(player)
+    getInventory(player)
+
+    player.CharacterAdded:Connect(function()
+        task.wait(2)
+
+        if AUTO_START then
+            task.spawn(runFarm, player)
+        end
+    end)
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    running[player] = nil
+    busy[player] = nil
+    inventories[player] = nil
+end)
+
+log("FarmSystem loaded")
