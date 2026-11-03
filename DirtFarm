@@ -1,55 +1,17 @@
-local TileService = require(script.Parent:WaitForChild("TileService"))
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local seedId = 12
-local signBlockId = 5667
+local button = script.Parent
+local remote = ReplicatedStorage
+	:WaitForChild("Remotes")
+	:WaitForChild("ToggleAutoPlant")
 
-local function getInventoryAmount(player, itemId)
-	-- Sambungkan ke sistem inventory game-mu.
-	return 0
-end
+local enabled = false
 
-local function findSignTiles()
-	for y = 0, 59 do
-		for x = 0, 99 do
-			local tile = TileService.GetTile(x, y)
+button.Text = "Auto Plant: OFF"
 
-			if tile and tile.foreground == signBlockId then
-				print("Sign tile:", x, y)
-				-- Sambungkan ke sistem pathfinding pemain.
-			end
-		end
-	end
-end
+button.Activated:Connect(function()
+	enabled = not enabled
 
-local function plantSeed(player, x, y)
-	local tile = TileService.GetTile(x, y)
-	local below = TileService.GetTile(x, y + 1)
-
-	if not tile or not below then
-		return false
-	end
-
-	if tile.foreground ~= 0 then
-		return false
-	end
-
-	local support = below.foreground
-	if support ~= 2 and support ~= 10 and support ~= 4
-		and (support == 0 or support == seedId) then
-		return false
-	end
-
-	if getInventoryAmount(player, seedId) < 1 then
-		return false
-	end
-
-	-- Kurangi seed dan tanam melalui sistem inventory/world milik game.
-	TileService.SetForeground(x, y, seedId)
-
-	return true
-end
-
-return {
-	PlantSeed = plantSeed,
-	FindSignTiles = findSignTiles,
-}
+	button.Text = enabled and "Auto Plant: ON" or "Auto Plant: OFF"
+	remote:FireServer(enabled)
+end)
