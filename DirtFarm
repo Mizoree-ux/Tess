@@ -1,417 +1,260 @@
 
---[[
-    Neon Panel GUI
-    Roblox Studio - LocalScript
-    Letakkan di StarterPlayer > StarterPlayerScripts
-]]
+-- LocalScript
+-- StarterPlayer > StarterPlayerScripts
 
 local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
+local UIS = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
-
--- Theme
-local C = {
-    Background = Color3.fromRGB(17, 17, 24),
-    Panel = Color3.fromRGB(25, 25, 34),
-    Panel2 = Color3.fromRGB(32, 32, 43),
-    Green = Color3.fromRGB(70, 255, 40),
-    Purple = Color3.fromRGB(130, 50, 180),
-    White = Color3.fromRGB(240, 240, 245),
-    Gray = Color3.fromRGB(145, 145, 160),
-}
-
 local gui = Instance.new("ScreenGui")
 gui.Name = "NeonPanel"
 gui.ResetOnSpawn = false
-gui.IgnoreGuiInset = true
-gui.Parent = playerGui
+gui.Parent = player:WaitForChild("PlayerGui")
 
-local function create(class, props, parent)
+local purple = Color3.fromRGB(130, 60, 190)
+local green = Color3.fromRGB(75, 255, 50)
+local dark = Color3.fromRGB(22, 22, 30)
+local panel = Color3.fromRGB(32, 32, 43)
+local white = Color3.fromRGB(245, 245, 245)
+
+local function make(class, props, parent)
     local obj = Instance.new(class)
-    for k, v in pairs(props or {}) do
+    for k, v in pairs(props) do
         obj[k] = v
     end
     obj.Parent = parent
     return obj
 end
 
-local function corner(obj, radius)
-    create("UICorner", {
-        CornerRadius = UDim.new(0, radius or 8)
+local function round(obj, radius)
+    make("UICorner", {
+        CornerRadius = UDim.new(0, radius)
     }, obj)
 end
 
-local function stroke(obj, color, thickness)
-    create("UIStroke", {
-        Color = color or C.Purple,
-        Thickness = thickness or 1,
-        Transparency = 0.15
-    }, obj)
-end
-
-local function label(parent, text, size, color, position, dimensions)
-    return create("TextLabel", {
-        BackgroundTransparency = 1,
-        Text = text,
-        TextSize = size or 14,
-        TextColor3 = color or C.White,
-        Font = Enum.Font.Gotham,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        Position = position or UDim2.new(),
-        Size = dimensions or UDim2.new(1, 0, 0, 25),
-    }, parent)
-end
-
--- Main window
-local main = create("Frame", {
+local main = make("Frame", {
     Name = "Main",
-    Size = UDim2.fromOffset(760, 460),
-    Position = UDim2.new(0.5, -380, 0.5, -230),
-    BackgroundColor3 = C.Background,
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.fromScale(0.5, 0.5),
+    Size = UDim2.new(0.95, 0, 0.75, 0),
+    BackgroundColor3 = dark,
     BorderSizePixel = 0,
 }, gui)
-corner(main, 12)
-stroke(main, C.Purple, 2)
+round(main, 12)
 
--- Responsive scaling
-local scale = create("UIScale", {Scale = 1}, main)
+make("UISizeConstraint", {
+    MinSize = Vector2.new(300, 250),
+    MaxSize = Vector2.new(760, 460),
+}, main)
 
-local function updateScale()
-    local camera = workspace.CurrentCamera
-    if camera then
-        local viewport = camera.ViewportSize
-        scale.Scale = math.min(1, viewport.X / 800, viewport.Y / 500)
-    end
-end
+make("UIStroke", {
+    Color = purple,
+    Thickness = 2,
+}, main)
 
-updateScale()
-workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
-
--- Header
-local header = create("Frame", {
+local header = make("Frame", {
     Size = UDim2.new(1, 0, 0, 42),
-    BackgroundColor3 = C.Panel,
+    BackgroundColor3 = panel,
     BorderSizePixel = 0,
 }, main)
-corner(header, 10)
+round(header, 10)
 
-label(header, "◆  NEON PANEL", 15, C.Green,
-    UDim2.fromOffset(16, 0), UDim2.new(0.5, 0, 1, 0))
-
-local close = create("TextButton", {
-    Text = "×",
-    TextSize = 25,
-    TextColor3 = C.White,
+make("TextLabel", {
+    Size = UDim2.new(1, -50, 1, 0),
+    Position = UDim2.fromOffset(12, 0),
     BackgroundTransparency = 1,
+    Text = "◆ NEON PANEL",
+    TextColor3 = green,
+    TextSize = 15,
+    Font = Enum.Font.GothamBold,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}, header)
+
+local close = make("TextButton", {
     Size = UDim2.fromOffset(40, 40),
     Position = UDim2.new(1, -42, 0, 0),
+    BackgroundTransparency = 1,
+    Text = "×",
+    TextColor3 = white,
+    TextSize = 25,
 }, header)
 
 close.MouseButton1Click:Connect(function()
-    gui.Enabled = false
+    main.Visible = false
 end)
 
--- Dragging
+-- Open button
+local open = make("TextButton", {
+    Size = UDim2.fromOffset(50, 50),
+    Position = UDim2.new(0, 15, 0.5, -25),
+    BackgroundColor3 = dark,
+    Text = "◆",
+    TextColor3 = green,
+    TextSize = 22,
+    Visible = false,
+}, gui)
+round(open, 12)
+
+close.MouseButton1Click:Connect(function()
+    open.Visible = true
+end)
+
+open.MouseButton1Click:Connect(function()
+    main.Visible = true
+    open.Visible = false
+end)
+
+-- Drag with mouse or touch
 local dragging = false
-local dragStart, startPos
+local dragStart
+local startPosition
 
 header.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1
         or input.UserInputType == Enum.UserInputType.Touch then
         dragging = true
         dragStart = input.Position
-        startPos = main.Position
+        startPosition = main.Position
     end
 end)
 
-header.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1
-        or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = false
-    end
-end)
-
-game:GetService("UserInputService").InputChanged:Connect(function(input)
+UIS.InputChanged:Connect(function(input)
     if dragging and (
         input.UserInputType == Enum.UserInputType.MouseMovement
         or input.UserInputType == Enum.UserInputType.Touch
     ) then
         local delta = input.Position - dragStart
         main.Position = UDim2.new(
-            startPos.X.Scale,
-            startPos.X.Offset + delta.X,
-            startPos.Y.Scale,
-            startPos.Y.Offset + delta.Y
+            startPosition.X.Scale,
+            startPosition.X.Offset + delta.X,
+            startPosition.Y.Scale,
+            startPosition.Y.Offset + delta.Y
         )
     end
 end)
 
--- Left icon bar
-local iconBar = create("Frame", {
+UIS.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+
+-- Sidebar
+local sidebar = make("Frame", {
     Position = UDim2.fromOffset(10, 52),
-    Size = UDim2.new(0, 48, 1, -64),
-    BackgroundColor3 = C.Panel,
+    Size = UDim2.new(0, 135, 1, -62),
+    BackgroundColor3 = panel,
     BorderSizePixel = 0,
 }, main)
-corner(iconBar, 10)
-stroke(iconBar, C.Purple)
+round(sidebar, 8)
 
-local iconLayout = create("UIListLayout", {
-    Padding = UDim.new(0, 8),
-    HorizontalAlignment = Enum.HorizontalAlignment.Center,
+local menuList = make("UIListLayout", {
+    Padding = UDim.new(0, 6),
     SortOrder = Enum.SortOrder.LayoutOrder,
-}, iconBar)
+}, sidebar)
 
-create("UIPadding", {
-    PaddingTop = UDim.new(0, 10),
-}, iconBar)
+make("UIPadding", {
+    PaddingTop = UDim.new(0, 8),
+    PaddingLeft = UDim.new(0, 6),
+    PaddingRight = UDim.new(0, 6),
+}, sidebar)
 
--- Menu list
-local menuFrame = create("Frame", {
-    Position = UDim2.fromOffset(66, 52),
-    Size = UDim2.new(0, 180, 1, -64),
-    BackgroundColor3 = C.Panel,
+-- Content
+local content = make("Frame", {
+    Position = UDim2.new(0, 155, 0, 52),
+    Size = UDim2.new(1, -165, 1, -62),
+    BackgroundColor3 = panel,
     BorderSizePixel = 0,
 }, main)
-corner(menuFrame, 10)
-stroke(menuFrame, C.Purple)
+round(content, 8)
 
-local menuTitle = label(menuFrame, "  MENU", 11, C.Gray,
-    UDim2.fromOffset(8, 8), UDim2.new(1, -16, 0, 22))
-
-local menuList = create("ScrollingFrame", {
-    Position = UDim2.fromOffset(6, 34),
-    Size = UDim2.new(1, -12, 1, -42),
+local contentTitle = make("TextLabel", {
+    Size = UDim2.new(1, -20, 0, 35),
+    Position = UDim2.fromOffset(10, 5),
     BackgroundTransparency = 1,
-    BorderSizePixel = 0,
-    ScrollBarThickness = 3,
-    ScrollBarImageColor3 = C.Purple,
-    CanvasSize = UDim2.new(),
-    AutomaticCanvasSize = Enum.AutomaticSize.Y,
-}, menuFrame)
+    Text = "HOME",
+    TextColor3 = green,
+    TextSize = 15,
+    Font = Enum.Font.GothamBold,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}, content)
 
-create("UIListLayout", {
-    Padding = UDim.new(0, 5),
-    SortOrder = Enum.SortOrder.LayoutOrder,
-}, menuList)
-
--- Right settings panel
-local settings = create("Frame", {
-    Position = UDim2.new(1, -250, 0, 52),
-    Size = UDim2.new(0, 240, 1, -64),
-    BackgroundColor3 = C.Panel,
-    BorderSizePixel = 0,
-}, main)
-corner(settings, 10)
-stroke(settings, C.Purple)
-
-local settingsTitle = label(settings, "  SETTINGS", 11, C.Gray,
-    UDim2.fromOffset(8, 8), UDim2.new(1, -16, 0, 22))
-
-local settingsList = create("ScrollingFrame", {
-    Position = UDim2.fromOffset(8, 34),
-    Size = UDim2.new(1, -16, 1, -42),
-    BackgroundTransparency = 1,
-    BorderSizePixel = 0,
-    ScrollBarThickness = 3,
-    ScrollBarImageColor3 = C.Purple,
-    CanvasSize = UDim2.new(),
-    AutomaticCanvasSize = Enum.AutomaticSize.Y,
-}, settings)
-
-create("UIListLayout", {
+local contentList = make("UIListLayout", {
     Padding = UDim.new(0, 8),
     SortOrder = Enum.SortOrder.LayoutOrder,
-}, settingsList)
+}, content)
 
--- Navigation definitions
-local pages = {
-    {
-        name = "Automation",
-        icon = "⚙",
-        options = {"Auto Farm", "Auto Collect", "Auto Quest", "Auto Sell"}
-    },
-    {
-        name = "Visual",
-        icon = "◉",
-        options = {"Show Names", "Highlight", "Show Effects"}
-    },
-    {
-        name = "Player",
-        icon = "♙",
-        options = {"Walk Speed", "Jump Power", "Reset Character"}
-    },
-    {
-        name = "World",
-        icon = "▦",
-        options = {"World Info", "Teleport Menu", "Spawn Location"}
-    },
-    {
-        name = "Misc",
-        icon = "☰",
-        options = {"Notifications", "UI Theme", "Hide GUI"}
-    },
-}
+make("UIPadding", {
+    PaddingTop = UDim.new(0, 45),
+    PaddingLeft = UDim.new(0, 10),
+    PaddingRight = UDim.new(0, 10),
+}, content)
 
-local activePage = nil
-local menuButtons = {}
-
-local function clearSettings()
-    for _, child in ipairs(settingsList:GetChildren()) do
-        if child:IsA("GuiObject") and not child:IsA("UIListLayout") then
-            child:Destroy()
+local function clearContent()
+    for _, child in ipairs(content:GetChildren()) do
+        if child:IsA("TextButton") or child:IsA("TextLabel") then
+            if child ~= contentTitle then
+                child:Destroy()
+            end
         end
     end
 end
 
-local function addSection(text)
-    local section = label(settingsList, text, 12, C.Green,
-        nil, UDim2.new(1, -4, 0, 25))
-    section.Font = Enum.Font.GothamBold
-    return section
-end
-
-local function addToggle(text)
-    local row = create("Frame", {
-        Size = UDim2.new(1, -4, 0, 36),
-        BackgroundColor3 = C.Panel2,
-        BorderSizePixel = 0,
-    }, settingsList)
-    corner(row, 7)
-
-    label(row, text, 12, C.White,
-        UDim2.fromOffset(10, 0), UDim2.new(1, -55, 1, 0))
-
-    local toggle = create("TextButton", {
-        Size = UDim2.fromOffset(34, 18),
-        Position = UDim2.new(1, -42, 0.5, -9),
-        BackgroundColor3 = Color3.fromRGB(70, 70, 80),
-        Text = "",
-        AutoButtonColor = false,
-    }, row)
-    corner(toggle, 10)
-
-    local knob = create("Frame", {
-        Size = UDim2.fromOffset(14, 14),
-        Position = UDim2.fromOffset(2, 2),
-        BackgroundColor3 = C.White,
-        BorderSizePixel = 0,
-    }, toggle)
-    corner(knob, 10)
-
+local function addToggle(name)
     local enabled = false
 
-    toggle.MouseButton1Click:Connect(function()
-        enabled = not enabled
-
-        TweenService:Create(toggle, TweenInfo.new(0.15), {
-            BackgroundColor3 = enabled and C.Green
-                or Color3.fromRGB(70, 70, 80)
-        }):Play()
-
-        TweenService:Create(knob, TweenInfo.new(0.15), {
-            Position = enabled and UDim2.fromOffset(18, 2)
-                or UDim2.fromOffset(2, 2)
-        }):Play()
-    end)
-end
-
-local function addButton(text, callback)
-    local button = create("TextButton", {
-        Size = UDim2.new(1, -4, 0, 34),
-        BackgroundColor3 = C.Green,
-        Text = text,
-        TextColor3 = Color3.fromRGB(20, 20, 20),
+    local button = make("TextButton", {
+        Size = UDim2.new(1, 0, 0, 38),
+        BackgroundColor3 = dark,
+        Text = name .. "   [ OFF ]",
+        TextColor3 = white,
         TextSize = 12,
-        Font = Enum.Font.GothamBold,
-        AutoButtonColor = true,
-    }, settingsList)
-    corner(button, 7)
+        Font = Enum.Font.Gotham,
+    }, content)
+    round(button, 7)
 
-    if callback then
-        button.MouseButton1Click:Connect(callback)
-    end
-end
-
-local function addSlider(text, minValue, maxValue)
-    local row = create("Frame", {
-        Size = UDim2.new(1, -4, 0, 55),
-        BackgroundColor3 = C.Panel2,
-        BorderSizePixel = 0,
-    }, settingsList)
-    corner(row, 7)
-
-    local value = minValue
-    label(row, text .. ": " .. value, 12, C.White,
-        UDim2.fromOffset(10, 3), UDim2.new(1, -20, 0, 20))
-
-    local bar = create("TextButton", {
-        Position = UDim2.fromOffset(10, 32),
-        Size = UDim2.new(1, -20, 0, 8),
-        BackgroundColor3 = Color3.fromRGB(65, 65, 75),
-        Text = "",
-        AutoButtonColor = false,
-    }, row)
-    corner(bar, 5)
-
-    local fill = create("Frame", {
-        Size = UDim2.new(0, 0, 1, 0),
-        BackgroundColor3 = C.Green,
-        BorderSizePixel = 0,
-    }, bar)
-    corner(fill, 5)
-
-    bar.MouseButton1Click:Connect(function()
-        value = value >= maxValue and minValue or value + 1
-        local percent = (value - minValue) / (maxValue - minValue)
-        fill.Size = UDim2.new(percent, 0, 1, 0)
-        row:FindFirstChildWhichIsA("TextLabel").Text =
-            text .. ": " .. value
+    button.MouseButton1Click:Connect(function()
+        enabled = not enabled
+        button.Text = name .. (enabled and "   [ ON ]" or "   [ OFF ]")
+        button.TextColor3 = enabled and green or white
     end)
 end
 
-local function showPage(page)
-    activePage = page
-    clearSettings()
-    settingsTitle.Text = "  " .. string.upper(page.name)
+local pages = {
+    Home = {"Welcome to Neon Panel", "GUI is running!"},
+    Automation = {"Auto Farm", "Auto Collect", "Auto Quest"},
+    Visual = {"Show Names", "Highlight", "Show Effects"},
+    Player = {"Walk Speed", "Jump Power"},
+    Misc = {"Notifications", "Hide GUI"},
+}
 
-    for _, button in ipairs(menuButtons) do
-        button.BackgroundColor3 = button.Name == page.name
-            and C.Green or C.Panel2
-        button.TextColor3 = button.Name == page.name
-            and Color3.fromRGB(20, 20, 20) or C.White
-    end
+local function showPage(name)
+    clearContent()
+    contentTitle.Text = string.upper(name)
 
-    addSection(page.name .. " Settings")
-
-    for _, option in ipairs(page.options) do
-        if option == "Walk Speed" then
-            addSlider(option, 16, 100)
-        elseif option == "Jump Power" then
-            addSlider(option, 50, 150)
-        elseif option == "Teleport Menu" then
-            addButton(option, function()
-                addSection("Teleport Menu")
-                addButton("Spawn", function()
-                    local character = player.Character
-                    local spawn = workspace:FindFirstChildWhichIsA("SpawnLocation")
-                    if character and spawn then
-                        character:PivotTo(spawn.CFrame + Vector3.new(0, 4, 0))
-                    end
-                end)
-            end)
-        elseif option == "Reset Character" then
-            addButton(option, function()
-                local character = player.Character
-                if character then
-                    character:BreakJoints()
-                end
-            end)
+    for _, option in ipairs(pages[name]) do
+        if name == "Home" then
+            local text = make("TextLabel", {
+                Size = UDim2.new(1, 0, 0, 35),
+                BackgroundTransparency = 1,
+                Text = option,
+                TextColor3 = white,
+                TextSize = 13,
+                Font = Enum.Font.Gotham,
+            }, content)
         elseif option == "Hide GUI" then
-            addButton(option, function()
-                gui.Enabled = false
+            local button = make("TextButton", {
+                Size = UDim2.new(1, 0, 0, 38),
+                BackgroundColor3 = green,
+                Text = option,
+                TextColor3 = dark,
+                TextSize = 12,
+            }, content)
+            round(button, 7)
+            button.MouseButton1Click:Connect(function()
+                main.Visible = false
+                open.Visible = true
             end)
         else
             addToggle(option)
@@ -419,45 +262,21 @@ local function showPage(page)
     end
 end
 
-for index, page in ipairs(pages) do
-    local icon = create("TextButton", {
-        Name = page.name,
-        Size = UDim2.fromOffset(34, 34),
-        BackgroundColor3 = C.Panel2,
-        Text = page.icon,
-        TextSize = 18,
-        TextColor3 = C.White,
-        Font = Enum.Font.GothamBold,
-        LayoutOrder = index,
-    }, iconBar)
-    corner(icon, 8)
-
-    local button = create("TextButton", {
-        Name = page.name,
-        Size = UDim2.new(1, -4, 0, 34),
-        BackgroundColor3 = C.Panel2,
-        Text = "  " .. page.name,
+for index, name in ipairs({"Home", "Automation", "Visual", "Player", "Misc"}) do
+    local button = make("TextButton", {
+        Size = UDim2.new(1, 0, 0, 36),
+        BackgroundColor3 = dark,
+        Text = name,
+        TextColor3 = white,
         TextSize = 12,
-        TextColor3 = C.White,
-        TextXAlignment = Enum.TextXAlignment.Left,
         Font = Enum.Font.Gotham,
         LayoutOrder = index,
-    }, menuList)
-    corner(button, 7)
-
-    table.insert(menuButtons, button)
-
-    icon.MouseButton1Click:Connect(function()
-        showPage(page)
-    end)
+    }, sidebar)
+    round(button, 6)
 
     button.MouseButton1Click:Connect(function()
-        showPage(page)
+        showPage(name)
     end)
 end
 
--- Footer
-local footer = label(main, "NEON PANEL  •  ROBLOX", 9, C.Gray,
-    UDim2.new(0, 12, 1, -15), UDim2.new(0, 220, 0, 12))
-
-showPage(pages[1])
+showPage("Home")
