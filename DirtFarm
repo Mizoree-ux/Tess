@@ -1,524 +1,463 @@
 
--- Growtopia-style AutoFarm for Roblox
--- ServerScriptService/FarmSystem
+--[[
+    Neon Panel GUI
+    Roblox Studio - LocalScript
+    Letakkan di StarterPlayer > StarterPlayerScripts
+]]
 
 local Players = game:GetService("Players")
-local ServerStorage = game:GetService("ServerStorage")
-local Workspace = game:GetService("Workspace")
+local TweenService = game:GetService("TweenService")
 
-local World = Workspace:WaitForChild("World")
-local Tiles = World:WaitForChild("Tiles")
-local Drops = World:WaitForChild("Drops")
-local Templates = ServerStorage:WaitForChild("TileTemplates")
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
 
--- CONFIG
-local WORLD_WIDTH = 100
-local WORLD_HEIGHT = 60
-local TILE_SIZE = 32
-
-local MAX_PLAYERS = 1
-local GROW_TIME = 30
-local INVENTORY_LIMIT = 200
-local FARM_ROW = 23
-local WORLD_BOTTOM = 54
-
-local AUTO_START = true
-
-local DROP_LIST = {
-    "Dirt", "DirtSeed",
-    "CaveBackground", "CaveBackgroundSeed",
-    "Lava", "LavaSeed",
-    "Rock", "RockSeed",
+-- Theme
+local C = {
+    Background = Color3.fromRGB(17, 17, 24),
+    Panel = Color3.fromRGB(25, 25, 34),
+    Panel2 = Color3.fromRGB(32, 32, 43),
+    Green = Color3.fromRGB(70, 255, 40),
+    Purple = Color3.fromRGB(130, 50, 180),
+    White = Color3.fromRGB(240, 240, 245),
+    Gray = Color3.fromRGB(145, 145, 160),
 }
 
-local TRASH_LIST = table.clone(DROP_LIST)
+local gui = Instance.new("ScreenGui")
+gui.Name = "NeonPanel"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.Parent = playerGui
 
--- STATE
-local tileMap = {}
-local inventories = {}
-local running = {}
-local busy = {}
-
--- UTILITY
-local function log(message)
-    print("[AutoFarm] " .. message)
-end
-
-local function tileKey(x, y)
-    return tostring(x) .. ":" .. tostring(y)
-end
-
-local function getTile(x, y)
-    return tileMap[tileKey(x, y)]
-end
-
-local function getXY(tile)
-    return tile:GetAttribute("TileX"), tile:GetAttribute("TileY")
-end
-
-local function getTileType(tile)
-    return tile:GetAttribute("TileType") or tile.Name
-end
-
-local function isEmpty(tile)
-    return tile == nil or not tile.Parent
-end
-
-local function isSolid(tile)
-    if isEmpty(tile) then
-        return false
+local function create(class, props, parent)
+    local obj = Instance.new(class)
+    for k, v in pairs(props or {}) do
+        obj[k] = v
     end
-
-    return tile:GetAttribute("Solid") ~= false
+    obj.Parent = parent
+    return obj
 end
 
-local function getInventory(player)
-    if not inventories[player] then
-        inventories[player] = {
-            Dirt = 0,
-            DirtSeed = 10,
-            WoodenPlatform = 100,
-            Lava = 0,
-            LavaSeed = 0,
-            CaveBackground = 0,
-            CaveBackgroundSeed = 0,
-            Rock = 0,
-            RockSeed = 0,
-        }
+local function corner(obj, radius)
+    create("UICorner", {
+        CornerRadius = UDim.new(0, radius or 8)
+    }, obj)
+end
+
+local function stroke(obj, color, thickness)
+    create("UIStroke", {
+        Color = color or C.Purple,
+        Thickness = thickness or 1,
+        Transparency = 0.15
+    }, obj)
+end
+
+local function label(parent, text, size, color, position, dimensions)
+    return create("TextLabel", {
+        BackgroundTransparency = 1,
+        Text = text,
+        TextSize = size or 14,
+        TextColor3 = color or C.White,
+        Font = Enum.Font.Gotham,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Position = position or UDim2.new(),
+        Size = dimensions or UDim2.new(1, 0, 0, 25),
+    }, parent)
+end
+
+-- Main window
+local main = create("Frame", {
+    Name = "Main",
+    Size = UDim2.fromOffset(760, 460),
+    Position = UDim2.new(0.5, -380, 0.5, -230),
+    BackgroundColor3 = C.Background,
+    BorderSizePixel = 0,
+}, gui)
+corner(main, 12)
+stroke(main, C.Purple, 2)
+
+-- Responsive scaling
+local scale = create("UIScale", {Scale = 1}, main)
+
+local function updateScale()
+    local camera = workspace.CurrentCamera
+    if camera then
+        local viewport = camera.ViewportSize
+        scale.Scale = math.min(1, viewport.X / 800, viewport.Y / 500)
     end
-
-    return inventories[player]
 end
 
-local function getAmount(player, item)
-    return getInventory(player)[item] or 0
-end
+updateScale()
+workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
 
-local function addItem(player, item, amount)
-    local inv = getInventory(player)
-    inv[item] = (inv[item] or 0) + amount
-end
+-- Header
+local header = create("Frame", {
+    Size = UDim2.new(1, 0, 0, 42),
+    BackgroundColor3 = C.Panel,
+    BorderSizePixel = 0,
+}, main)
+corner(header, 10)
 
-local function removeItem(player, item, amount)
-    local inv = getInventory(player)
+label(header, "◆  NEON PANEL", 15, C.Green,
+    UDim2.fromOffset(16, 0), UDim2.new(0.5, 0, 1, 0))
 
-    if (inv[item] or 0) < amount then
-        return false
+local close = create("TextButton", {
+    Text = "×",
+    TextSize = 25,
+    TextColor3 = C.White,
+    BackgroundTransparency = 1,
+    Size = UDim2.fromOffset(40, 40),
+    Position = UDim2.new(1, -42, 0, 0),
+}, header)
+
+close.MouseButton1Click:Connect(function()
+    gui.Enabled = false
+end)
+
+-- Dragging
+local dragging = false
+local dragStart, startPos
+
+header.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = main.Position
     end
+end)
 
-    inv[item] -= amount
-    return true
-end
+header.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
 
-local function updateTileMap()
-    table.clear(tileMap)
+game:GetService("UserInputService").InputChanged:Connect(function(input)
+    if dragging and (
+        input.UserInputType == Enum.UserInputType.MouseMovement
+        or input.UserInputType == Enum.UserInputType.Touch
+    ) then
+        local delta = input.Position - dragStart
+        main.Position = UDim2.new(
+            startPos.X.Scale,
+            startPos.X.Offset + delta.X,
+            startPos.Y.Scale,
+            startPos.Y.Offset + delta.Y
+        )
+    end
+end)
 
-    for _, tile in ipairs(Tiles:GetChildren()) do
-        if tile:IsA("BasePart") then
-            local x = tile:GetAttribute("TileX")
-            local y = tile:GetAttribute("TileY")
+-- Left icon bar
+local iconBar = create("Frame", {
+    Position = UDim2.fromOffset(10, 52),
+    Size = UDim2.new(0, 48, 1, -64),
+    BackgroundColor3 = C.Panel,
+    BorderSizePixel = 0,
+}, main)
+corner(iconBar, 10)
+stroke(iconBar, C.Purple)
 
-            if x ~= nil and y ~= nil then
-                tileMap[tileKey(x, y)] = tile
-            end
+local iconLayout = create("UIListLayout", {
+    Padding = UDim.new(0, 8),
+    HorizontalAlignment = Enum.HorizontalAlignment.Center,
+    SortOrder = Enum.SortOrder.LayoutOrder,
+}, iconBar)
+
+create("UIPadding", {
+    PaddingTop = UDim.new(0, 10),
+}, iconBar)
+
+-- Menu list
+local menuFrame = create("Frame", {
+    Position = UDim2.fromOffset(66, 52),
+    Size = UDim2.new(0, 180, 1, -64),
+    BackgroundColor3 = C.Panel,
+    BorderSizePixel = 0,
+}, main)
+corner(menuFrame, 10)
+stroke(menuFrame, C.Purple)
+
+local menuTitle = label(menuFrame, "  MENU", 11, C.Gray,
+    UDim2.fromOffset(8, 8), UDim2.new(1, -16, 0, 22))
+
+local menuList = create("ScrollingFrame", {
+    Position = UDim2.fromOffset(6, 34),
+    Size = UDim2.new(1, -12, 1, -42),
+    BackgroundTransparency = 1,
+    BorderSizePixel = 0,
+    ScrollBarThickness = 3,
+    ScrollBarImageColor3 = C.Purple,
+    CanvasSize = UDim2.new(),
+    AutomaticCanvasSize = Enum.AutomaticSize.Y,
+}, menuFrame)
+
+create("UIListLayout", {
+    Padding = UDim.new(0, 5),
+    SortOrder = Enum.SortOrder.LayoutOrder,
+}, menuList)
+
+-- Right settings panel
+local settings = create("Frame", {
+    Position = UDim2.new(1, -250, 0, 52),
+    Size = UDim2.new(0, 240, 1, -64),
+    BackgroundColor3 = C.Panel,
+    BorderSizePixel = 0,
+}, main)
+corner(settings, 10)
+stroke(settings, C.Purple)
+
+local settingsTitle = label(settings, "  SETTINGS", 11, C.Gray,
+    UDim2.fromOffset(8, 8), UDim2.new(1, -16, 0, 22))
+
+local settingsList = create("ScrollingFrame", {
+    Position = UDim2.fromOffset(8, 34),
+    Size = UDim2.new(1, -16, 1, -42),
+    BackgroundTransparency = 1,
+    BorderSizePixel = 0,
+    ScrollBarThickness = 3,
+    ScrollBarImageColor3 = C.Purple,
+    CanvasSize = UDim2.new(),
+    AutomaticCanvasSize = Enum.AutomaticSize.Y,
+}, settings)
+
+create("UIListLayout", {
+    Padding = UDim.new(0, 8),
+    SortOrder = Enum.SortOrder.LayoutOrder,
+}, settingsList)
+
+-- Navigation definitions
+local pages = {
+    {
+        name = "Automation",
+        icon = "⚙",
+        options = {"Auto Farm", "Auto Collect", "Auto Quest", "Auto Sell"}
+    },
+    {
+        name = "Visual",
+        icon = "◉",
+        options = {"Show Names", "Highlight", "Show Effects"}
+    },
+    {
+        name = "Player",
+        icon = "♙",
+        options = {"Walk Speed", "Jump Power", "Reset Character"}
+    },
+    {
+        name = "World",
+        icon = "▦",
+        options = {"World Info", "Teleport Menu", "Spawn Location"}
+    },
+    {
+        name = "Misc",
+        icon = "☰",
+        options = {"Notifications", "UI Theme", "Hide GUI"}
+    },
+}
+
+local activePage = nil
+local menuButtons = {}
+
+local function clearSettings()
+    for _, child in ipairs(settingsList:GetChildren()) do
+        if child:IsA("GuiObject") and not child:IsA("UIListLayout") then
+            child:Destroy()
         end
     end
 end
 
-local function getCharacter(player)
-    local character = player.Character
-    if not character then
-        return nil
-    end
-
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    local root = character:FindFirstChild("HumanoidRootPart")
-
-    if not humanoid or not root then
-        return nil
-    end
-
-    return character, humanoid, root
+local function addSection(text)
+    local section = label(settingsList, text, 12, C.Green,
+        nil, UDim2.new(1, -4, 0, 25))
+    section.Font = Enum.Font.GothamBold
+    return section
 end
 
-local function tilePosition(x, y)
-    return Vector3.new(
-        x * TILE_SIZE + TILE_SIZE / 2,
-        y * TILE_SIZE + TILE_SIZE / 2,
-        0
-    )
-end
-
-local function moveToTile(player, x, y)
-    local _, humanoid, root = getCharacter(player)
-
-    if not humanoid or not root then
-        return false
-    end
-
-    local target = tilePosition(x, y)
-    humanoid:MoveTo(target)
-
-    local timeout = 0
-    repeat
-        task.wait(0.1)
-        timeout += 0.1
-
-        if not running[player] then
-            return false
-        end
-    until (root.Position - target).Magnitude <= TILE_SIZE
-        or timeout >= 5
-
-    return true
-end
-
-local function createDrop(item, amount, position)
-    local drop = Instance.new("Part")
-    drop.Name = item
-    drop.Size = Vector3.new(1.5, 1.5, 1.5)
-    drop.Position = position + Vector3.new(0, 2, 0)
-    drop.Anchored = false
-    drop.CanCollide = true
-    drop:SetAttribute("Item", item)
-    drop:SetAttribute("Amount", amount)
-    drop.Parent = Drops
-
-    return drop
-end
-
-local function collectDrops(player)
-    local _, _, root = getCharacter(player)
-    if not root then
-        return
-    end
-
-    for _, drop in ipairs(Drops:GetChildren()) do
-        if drop:IsA("BasePart") then
-            local distance = (root.Position - drop.Position).Magnitude
-
-            if distance <= TILE_SIZE * 2 then
-                local item = drop:GetAttribute("Item") or drop.Name
-                local amount = drop:GetAttribute("Amount") or 1
-
-                addItem(player, item, amount)
-                drop:Destroy()
-            end
-        end
-    end
-end
-
-local function breakTile(player, x, y)
-    local tile = getTile(x, y)
-
-    if isEmpty(tile) then
-        return false
-    end
-
-    if not moveToTile(player, x, y) then
-        return false
-    end
-
-    local item = getTileType(tile)
-    local position = tile.Position
-
-    tileMap[tileKey(x, y)] = nil
-    tile:Destroy()
-
-    createDrop(item, 1, position)
-    collectDrops(player)
-
-    return true
-end
-
-local function placeTile(player, x, y, item)
-    if not isEmpty(getTile(x, y)) then
-        return false
-    end
-
-    local template = Templates:FindFirstChild(item)
-    if not template or not template:IsA("BasePart") then
-        warn("Missing tile template: " .. item)
-        return false
-    end
-
-    if not removeItem(player, item, 1) then
-        return false
-    end
-
-    local tile = template:Clone()
-    tile.Name = item
-    tile:SetAttribute("TileType", item)
-    tile:SetAttribute("TileX", x)
-    tile:SetAttribute("TileY", y)
-    tile.Position = tilePosition(x, y)
-    tile.Parent = Tiles
-
-    tileMap[tileKey(x, y)] = tile
-
-    return true
-end
-
-local function isGroundedTile(x, y)
-    local below = getTile(x, y + 1)
-    return isSolid(below)
-end
-
-local function plant(player, x, y)
-    local tile = getTile(x, y)
-
-    if not isEmpty(tile) then
-        return false
-    end
-
-    if not isGroundedTile(x, y) then
-        return false
-    end
-
-    if not removeItem(player, "DirtSeed", 1) then
-        return false
-    end
-
-    local seed = Templates:FindFirstChild("DirtSeed")
-    if not seed then
-        addItem(player, "DirtSeed", 1)
-        return false
-    end
-
-    local crop = seed:Clone()
-    crop.Name = "DirtSeed"
-    crop:SetAttribute("TileType", "DirtSeed")
-    crop:SetAttribute("TileX", x)
-    crop:SetAttribute("TileY", y)
-    crop:SetAttribute("ReadyAt", os.time() + GROW_TIME)
-    crop.Position = tilePosition(x, y)
-    crop.Parent = Tiles
-
-    tileMap[tileKey(x, y)] = crop
-    return true
-end
-
-local function harvest(player, x, y)
-    local tile = getTile(x, y)
-
-    if isEmpty(tile) or getTileType(tile) ~= "DirtSeed" then
-        return false
-    end
-
-    local readyAt = tile:GetAttribute("ReadyAt") or 0
-
-    if os.time() < readyAt then
-        return false
-    end
-
-    local position = tile.Position
-
-    tileMap[tileKey(x, y)] = nil
-    tile:Destroy()
-
-    addItem(player, "Dirt", 1)
-    addItem(player, "DirtSeed", 1)
-
-    createDrop("Dirt", 1, position)
-    collectDrops(player)
-
-    return true
-end
-
-local function dropExcess(player)
-    for _, item in ipairs(DROP_LIST) do
-        local amount = getAmount(player, item)
-
-        if amount >= INVENTORY_LIMIT then
-            local dropAmount = amount - 100
-
-            if removeItem(player, item, dropAmount) then
-                local _, _, root = getCharacter(player)
-
-                if root then
-                    createDrop(item, dropAmount, root.Position)
-                end
-            end
-        end
-    end
-end
-
-local function trashExcess(player, amount)
-    for _, item in ipairs(TRASH_LIST) do
-        local count = getAmount(player, item)
-
-        if count >= amount then
-            removeItem(player, item, count)
-        end
-    end
-end
-
--- WORLD OPERATIONS
-local function clearSide(player, minX, maxX)
-    for y = 0, WORLD_BOTTOM - 1 do
-        for x = minX, maxX do
-            local tile = getTile(x, y)
-
-            if not isEmpty(tile) then
-                breakTile(player, x, y)
-            end
-        end
-    end
-end
-
-local function placePlatforms(player, x)
-    for y = 3, WORLD_BOTTOM - 1 do
-        if isEmpty(getTile(x, y)) and isSolid(getTile(x, y + 1)) then
-            placeTile(player, x, y, "WoodenPlatform")
-        end
-    end
-end
-
-local function clearCaveBackground(player)
-    for y = 0, WORLD_BOTTOM - 1 do
-        for x = 2, 97 do
-            local tile = getTile(x, y)
-
-            if not isEmpty(tile)
-                and getTileType(tile) == "CaveBackground"
-                and getTileType(getTile(x, y + 1)) == "CaveBackground"
-            then
-                breakTile(player, x, y + 1)
-            end
-        end
-    end
-end
-
-local function replaceLava(player)
-    for y = 45, WORLD_BOTTOM - 1 do
-        for x = 1, 97 do
-            local tile = getTile(x, y)
-
-            if not isEmpty(tile) and getTileType(tile) == "Lava" then
-                breakTile(player, x, y)
-                placeTile(player, x, y, "Dirt")
-            end
-        end
-    end
-end
-
-local function gatherDirt(player)
-    for y = FARM_ROW, WORLD_BOTTOM - 1 do
-        for x = 2, 97 do
-            local tile = getTile(x, y)
-
-            if not isEmpty(tile)
-                and getTileType(tile) == "Dirt"
-                and getAmount(player, "Dirt") < INVENTORY_LIMIT
-            then
-                breakTile(player, x, y)
-            end
-        end
-    end
-end
-
-local function plantAndHarvest(player)
-    for y = FARM_ROW, WORLD_BOTTOM - 1 do
-        for x = 2, 97 do
-            if getAmount(player, "DirtSeed") > 0 then
-                plant(player, x, y)
-            end
-
-            harvest(player, x, y)
-        end
-    end
-end
-
-local function makeDirtRows(player)
-    for y = FARM_ROW, WORLD_BOTTOM - 1 do
-        for x = 1, 97 do
-            if isEmpty(getTile(x, y)) and isSolid(getTile(x, y + 1)) then
-                if getAmount(player, "Dirt") > 0 then
-                    placeTile(player, x, y, "Dirt")
-                end
-            end
-        end
-    end
-end
-
--- MAIN LOOP
-local function runFarm(player)
-    if busy[player] then
-        return
-    end
-
-    busy[player] = true
-    running[player] = true
-
-    log("Starting farm for " .. player.Name)
-
-    while running[player] and player.Parent do
-        updateTileMap()
-
-        if #Players:GetPlayers() <= MAX_PLAYERS then
-            log("Clearing left side")
-            clearSide(player, 0, 1)
-
-            log("Placing left platforms")
-            if getAmount(player, "WoodenPlatform") >= 26 then
-                placePlatforms(player, 1)
-            end
-
-            log("Clearing right side")
-            clearSide(player, 98, 99)
-
-            log("Placing right platforms")
-            if getAmount(player, "WoodenPlatform") >= 26 then
-                placePlatforms(player, 98)
-            end
-
-            log("Clearing cave background")
-            clearCaveBackground(player)
-
-            log("Replacing lava")
-            replaceLava(player)
-
-            log("Gathering dirt")
-            gatherDirt(player)
-
-            log("Planting and harvesting")
-            plantAndHarvest(player)
-
-            log("Making dirt rows")
-            makeDirtRows(player)
-
-            log("Collecting and managing items")
-            collectDrops(player)
-            dropExcess(player)
-            trashExcess(player, 200)
-
-            task.wait(1)
-        else
-            log("Too many players; waiting")
-            task.wait(10)
-        end
-    end
-
-    busy[player] = nil
-    log("Farm stopped for " .. player.Name)
-end
-
-Players.PlayerAdded:Connect(function(player)
-    getInventory(player)
-
-    player.CharacterAdded:Connect(function()
-        task.wait(2)
-
-        if AUTO_START then
-            task.spawn(runFarm, player)
-        end
+local function addToggle(text)
+    local row = create("Frame", {
+        Size = UDim2.new(1, -4, 0, 36),
+        BackgroundColor3 = C.Panel2,
+        BorderSizePixel = 0,
+    }, settingsList)
+    corner(row, 7)
+
+    label(row, text, 12, C.White,
+        UDim2.fromOffset(10, 0), UDim2.new(1, -55, 1, 0))
+
+    local toggle = create("TextButton", {
+        Size = UDim2.fromOffset(34, 18),
+        Position = UDim2.new(1, -42, 0.5, -9),
+        BackgroundColor3 = Color3.fromRGB(70, 70, 80),
+        Text = "",
+        AutoButtonColor = false,
+    }, row)
+    corner(toggle, 10)
+
+    local knob = create("Frame", {
+        Size = UDim2.fromOffset(14, 14),
+        Position = UDim2.fromOffset(2, 2),
+        BackgroundColor3 = C.White,
+        BorderSizePixel = 0,
+    }, toggle)
+    corner(knob, 10)
+
+    local enabled = false
+
+    toggle.MouseButton1Click:Connect(function()
+        enabled = not enabled
+
+        TweenService:Create(toggle, TweenInfo.new(0.15), {
+            BackgroundColor3 = enabled and C.Green
+                or Color3.fromRGB(70, 70, 80)
+        }):Play()
+
+        TweenService:Create(knob, TweenInfo.new(0.15), {
+            Position = enabled and UDim2.fromOffset(18, 2)
+                or UDim2.fromOffset(2, 2)
+        }):Play()
     end)
-end)
+end
 
-Players.PlayerRemoving:Connect(function(player)
-    running[player] = nil
-    busy[player] = nil
-    inventories[player] = nil
-end)
+local function addButton(text, callback)
+    local button = create("TextButton", {
+        Size = UDim2.new(1, -4, 0, 34),
+        BackgroundColor3 = C.Green,
+        Text = text,
+        TextColor3 = Color3.fromRGB(20, 20, 20),
+        TextSize = 12,
+        Font = Enum.Font.GothamBold,
+        AutoButtonColor = true,
+    }, settingsList)
+    corner(button, 7)
 
-log("FarmSystem loaded")
+    if callback then
+        button.MouseButton1Click:Connect(callback)
+    end
+end
+
+local function addSlider(text, minValue, maxValue)
+    local row = create("Frame", {
+        Size = UDim2.new(1, -4, 0, 55),
+        BackgroundColor3 = C.Panel2,
+        BorderSizePixel = 0,
+    }, settingsList)
+    corner(row, 7)
+
+    local value = minValue
+    label(row, text .. ": " .. value, 12, C.White,
+        UDim2.fromOffset(10, 3), UDim2.new(1, -20, 0, 20))
+
+    local bar = create("TextButton", {
+        Position = UDim2.fromOffset(10, 32),
+        Size = UDim2.new(1, -20, 0, 8),
+        BackgroundColor3 = Color3.fromRGB(65, 65, 75),
+        Text = "",
+        AutoButtonColor = false,
+    }, row)
+    corner(bar, 5)
+
+    local fill = create("Frame", {
+        Size = UDim2.new(0, 0, 1, 0),
+        BackgroundColor3 = C.Green,
+        BorderSizePixel = 0,
+    }, bar)
+    corner(fill, 5)
+
+    bar.MouseButton1Click:Connect(function()
+        value = value >= maxValue and minValue or value + 1
+        local percent = (value - minValue) / (maxValue - minValue)
+        fill.Size = UDim2.new(percent, 0, 1, 0)
+        row:FindFirstChildWhichIsA("TextLabel").Text =
+            text .. ": " .. value
+    end)
+end
+
+local function showPage(page)
+    activePage = page
+    clearSettings()
+    settingsTitle.Text = "  " .. string.upper(page.name)
+
+    for _, button in ipairs(menuButtons) do
+        button.BackgroundColor3 = button.Name == page.name
+            and C.Green or C.Panel2
+        button.TextColor3 = button.Name == page.name
+            and Color3.fromRGB(20, 20, 20) or C.White
+    end
+
+    addSection(page.name .. " Settings")
+
+    for _, option in ipairs(page.options) do
+        if option == "Walk Speed" then
+            addSlider(option, 16, 100)
+        elseif option == "Jump Power" then
+            addSlider(option, 50, 150)
+        elseif option == "Teleport Menu" then
+            addButton(option, function()
+                addSection("Teleport Menu")
+                addButton("Spawn", function()
+                    local character = player.Character
+                    local spawn = workspace:FindFirstChildWhichIsA("SpawnLocation")
+                    if character and spawn then
+                        character:PivotTo(spawn.CFrame + Vector3.new(0, 4, 0))
+                    end
+                end)
+            end)
+        elseif option == "Reset Character" then
+            addButton(option, function()
+                local character = player.Character
+                if character then
+                    character:BreakJoints()
+                end
+            end)
+        elseif option == "Hide GUI" then
+            addButton(option, function()
+                gui.Enabled = false
+            end)
+        else
+            addToggle(option)
+        end
+    end
+end
+
+for index, page in ipairs(pages) do
+    local icon = create("TextButton", {
+        Name = page.name,
+        Size = UDim2.fromOffset(34, 34),
+        BackgroundColor3 = C.Panel2,
+        Text = page.icon,
+        TextSize = 18,
+        TextColor3 = C.White,
+        Font = Enum.Font.GothamBold,
+        LayoutOrder = index,
+    }, iconBar)
+    corner(icon, 8)
+
+    local button = create("TextButton", {
+        Name = page.name,
+        Size = UDim2.new(1, -4, 0, 34),
+        BackgroundColor3 = C.Panel2,
+        Text = "  " .. page.name,
+        TextSize = 12,
+        TextColor3 = C.White,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Font = Enum.Font.Gotham,
+        LayoutOrder = index,
+    }, menuList)
+    corner(button, 7)
+
+    table.insert(menuButtons, button)
+
+    icon.MouseButton1Click:Connect(function()
+        showPage(page)
+    end)
+
+    button.MouseButton1Click:Connect(function()
+        showPage(page)
+    end)
+end
+
+-- Footer
+local footer = label(main, "NEON PANEL  •  ROBLOX", 9, C.Gray,
+    UDim2.new(0, 12, 1, -15), UDim2.new(0, 220, 0, 12))
+
+showPage(pages[1])
