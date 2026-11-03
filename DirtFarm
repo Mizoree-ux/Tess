@@ -1,102 +1,55 @@
--- Growtopia-style planting system for Roblox
--- LocalScript: StarterPlayer > StarterPlayerScripts
+local TileService = require(script.Parent:WaitForChild("TileService"))
 
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local player = Players.LocalPlayer
-
--- Konfigurasi
 local seedId = 12
 local signBlockId = 5667
 
-local tilesFolder = workspace:WaitForChild("Tiles")
-local plantRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("PlantSeed")
-
-local function getTile(x, y)
-	for _, tile in ipairs(tilesFolder:GetChildren()) do
-		if tile:GetAttribute("X") == x and tile:GetAttribute("Y") == y then
-			return tile
-		end
-	end
-	return nil
-end
-
-local function getInventoryAmount(itemId)
-	-- Sesuaikan dengan sistem inventory game kamu.
-	local inventory = player:FindFirstChild("Inventory")
-	if not inventory then
-		return 0
-	end
-
-	local item = inventory:FindFirstChild(tostring(itemId))
-	if item and item:IsA("IntValue") then
-		return item.Value
-	end
-
+local function getInventoryAmount(player, itemId)
+	-- Sambungkan ke sistem inventory game-mu.
 	return 0
 end
 
-local function moveToTile(tile)
-	local character = player.Character
-	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-	if not humanoid then
-		return
-	end
-
-	humanoid:MoveTo(tile.Position)
-	humanoid.MoveToFinished:Wait()
-end
-
-local function findSignBlocks()
-	for _, tile in ipairs(tilesFolder:GetChildren()) do
-		if tile:GetAttribute("Foreground") == signBlockId then
-			moveToTile(tile)
-			task.wait(0.3)
-		end
-	end
-end
-
-local function plantSeed(x, y)
-	plantRemote:FireServer(x, y, seedId)
-end
-
-local function plant()
-	if getInventoryAmount(seedId) <= 4 then
-		findSignBlocks()
-		return
-	end
-
-	for y = 1, 54 do
+local function findSignTiles()
+	for y = 0, 59 do
 		for x = 0, 99 do
-			if getInventoryAmount(seedId) < 4 then
-				return
-			end
+			local tile = TileService.GetTile(x, y)
 
-			local tileDown = getTile(x, y)
-			if tileDown then
-				local foreground = tileDown:GetAttribute("Foreground")
-
-				if foreground == 2
-					or foreground == 10
-					or foreground == 4
-					or (foreground ~= 0 and foreground ~= seedId) then
-
-					local tileUp = getTile(x, y - 1)
-
-					if tileUp and tileUp:GetAttribute("Foreground") == 0 then
-						moveToTile(tileUp)
-						task.wait(0.6)
-						plantSeed(x, y - 1)
-						task.wait(0.25)
-					end
-				end
+			if tile and tile.foreground == signBlockId then
+				print("Sign tile:", x, y)
+				-- Sambungkan ke sistem pathfinding pemain.
 			end
 		end
 	end
 end
 
-while true do
-	plant()
-	task.wait(1)
+local function plantSeed(player, x, y)
+	local tile = TileService.GetTile(x, y)
+	local below = TileService.GetTile(x, y + 1)
+
+	if not tile or not below then
+		return false
+	end
+
+	if tile.foreground ~= 0 then
+		return false
+	end
+
+	local support = below.foreground
+	if support ~= 2 and support ~= 10 and support ~= 4
+		and (support == 0 or support == seedId) then
+		return false
+	end
+
+	if getInventoryAmount(player, seedId) < 1 then
+		return false
+	end
+
+	-- Kurangi seed dan tanam melalui sistem inventory/world milik game.
+	TileService.SetForeground(x, y, seedId)
+
+	return true
 end
+
+return {
+	PlantSeed = plantSeed,
+	FindSignTiles = findSignTiles,
+}
