@@ -69,7 +69,7 @@ local _E = {
     UpHeld = false,
     DownHeld = false,
     CustomName = true,
-    NameText = "Fian792",
+    NameText = "SkyP",
 }
 local _F = {
     Running = false,
@@ -438,7 +438,7 @@ local _W = {Lang = "id", Saved = "id", Ask = true} do
             ["Isi URL webhook dulu"] = "Fill in the webhook URL first",
             ["Pesan tes masuk antrian"] = "Test message queued",
             ["URL webhook tidak valid"] = "Invalid webhook URL",
-            ["Tes notifikasi dari Fian792"] = "Test notification from Fian792",
+            ["Tes notifikasi dari SkyP"] = "Test notification from SkyP",
             ["Kiri → Kanan"] = "Left → Right",
             ["Semua pemain"] = "All players",
             ["Semua"] = "All",
@@ -1155,7 +1155,7 @@ local _cz = {
                     if not _cJ then
                         _cz.Status = "Executor tidak punya fungsi request"
                     else
-                        local _cK = _cA:JSONEncode({username = "Fian792", content = ("**[%s]** %s"):format(_k.Name, _cI),})
+                        local _cK = _cA:JSONEncode({username = "SkyP", content = ("**[%s]** %s"):format(_k.Name, _cI),})
                         local _cL, _cM = pcall(_cJ, {
                             Url = _cz.Url,
                             Method = "POST",
@@ -1621,7 +1621,7 @@ local function _fx(_fy, _fz, _fA, _fB)
         if _fC then
             return true
         end
-        warn("[Fian792] setTile game gagal, pakai remote langsung: " .. tostring(_fD))
+        warn("[SkyP] setTile game gagal, pakai remote langsung: " .. tostring(_fD))
     end
     if _r and type(_s) == "table" and type(_s.tile) == "table" then
         local _fE = pcall(_s.tile.send, {layer = (_fy == "bg") and 2 or 1, x = _fz, y = _fA, id = _fB, flip = false,})
@@ -3806,7 +3806,7 @@ local _kj = {} do
             task.spawn(function()
                 local _tE, _tF = pcall(_tf)
                 if not _tE then
-                    warn("[Fian792] Auto Clear error: " .. tostring(_tF))
+                    warn("[SkyP] Auto Clear error: " .. tostring(_tF))
                     if _F.Running then
                         _kf("Error: " .. tostring(_tF))
                     end
@@ -4269,7 +4269,7 @@ local _kj = {} do
             task.spawn(function()
                 local _wj, _wk = pcall(_wa)
                 if not _wj then
-                    warn("[Fian792] Farmer error: " .. tostring(_wk))
+                    warn("[SkyP] Farmer error: " .. tostring(_wk))
                     if _M.Running then
                         _kg("Error: " .. tostring(_wk))
                     end
@@ -4500,7 +4500,7 @@ local _kj = {} do
             task.spawn(function()
                 local _xN, _xO = pcall(_xz, _xM)
                 if not _xN then
-                    warn("[Fian792] Splice error: " .. tostring(_xO))
+                    warn("[SkyP] Splice error: " .. tostring(_xO))
                     if _H.Running and _H.stop then
                         _H.stop("Error: " .. tostring(_xO))
                     end
@@ -4778,7 +4778,7 @@ local _kj = {} do
             _K.Status = "Break " .. _dM(_zF.block) .. " di posisi pabrik"
             local _zM, _zN = pcall(_ju, _zJ)
             if not _zM then
-                warn("[Fian792] Pabrik break error: " .. tostring(_zN))
+                warn("[SkyP] Pabrik break error: " .. tostring(_zN))
             end
             _D.Running = false
             _D.Override = nil
@@ -5106,7 +5106,7 @@ local _kj = {} do
             task.spawn(function()
                 local _Bc, _Bd = pcall(_AP, _Bb)
                 if not _Bc then
-                    warn("[Fian792] Pabrik error: " .. tostring(_Bd))
+                    warn("[SkyP] Pabrik error: " .. tostring(_Bd))
                     if _K.Running then
                         _K.stop("Error: " .. tostring(_Bd))
                     end
@@ -5365,7 +5365,7 @@ local _kj = {} do
             task.spawn(function()
                 local _Ce, _Cf = pcall(_BP, _Cd)
                 if not _Ce then
-                    warn("[Fian792] Bangun Lahan error: " .. tostring(_Cf))
+                    warn("[SkyP] Bangun Lahan error: " .. tostring(_Cf))
                     if _J.Running then
                         _J.stop("Error: " .. tostring(_Cf))
                     end
@@ -5926,7 +5926,7 @@ end) do
         end
         local _EF = pcall(function()
             _C:Popup({
-                Title = "Fian792",
+                Title = "SkyP",
                 Icon = "languages",
                 Content = "Pilih bahasa menu\nChoose menu language",
                 Buttons = {
@@ -5961,23 +5961,23 @@ end) do
     end)()
 end
 local _EH = _W.wrap(_C:CreateWindow({
-    Title = "Fian792",
+    Title = "SkyP",
     Icon = "clound-lightning",
     Author = "v1.2 | https://discord.gg/s5ajQ2Cpdp",
-    Folder = "Alfian792",
+    Folder = "AlSkyP",
     Size = UDim2.fromOffset(640, 380),
     Theme = "Dark",
     Transparent = true,
     SideBarWidth = 150,
 }))
 pcall(function()
-    _EH:EditOpenButton({Title = "Fian792", Icon = "clound-lightning", Draggable = true})
+    _EH:EditOpenButton({Title = "SkyP", Icon = "clound-lightning", Draggable = true})
 end)
 
 local function _EI(_EJ)
     local _EK, _EL = pcall(_EJ)
     if not _EK then
-        warn("[Fian792] UI error: " .. tostring(_EL))
+        warn("[SkyP] UI error: " .. tostring(_EL))
     end
 end
 local _EM = {}
@@ -6842,7 +6842,7 @@ end) do
             task.spawn(function()
                 local _HN, _HO = pcall(_HE, _HL, _HM)
                 if not _HN then
-                    warn("[Fian792] Penjaga lanjut error: " .. tostring(_HO))
+                    warn("[SkyP] Penjaga lanjut error: " .. tostring(_HO))
                 end
                 if _L.Token == _HM and _L.Mode == "back" then
                     _L.Mode, _L.Saved, _L.BackText = "idle", nil, nil
@@ -7073,7 +7073,7 @@ end) do
                 local _ID = (_L.Mode ~= "away" and _L.Mode ~= "out") and _GN() or {}
                 local _IE, _IF = pcall(_L.tick, _ID)
                 if not _IE then
-                    warn("[Fian792] Penjaga error: " .. tostring(_IF))
+                    warn("[SkyP] Penjaga error: " .. tostring(_IF))
                 end
                 _L.updateStatus(_ID)
                 task.wait(0.5)
@@ -9313,7 +9313,7 @@ end do
                     end
                     local _RB = _cz.On
                     _cz.On = true
-                    _cz.send("test", "Tes notifikasi dari Fian792")
+                    _cz.send("test", "Tes notifikasi dari SkyP")
                     _cz.On = _RB
                     _bH("Discord", "Pesan tes masuk antrian", 3)
                 end,
@@ -9351,7 +9351,7 @@ end do
     end)()
 end
 task.spawn(function()
-    _Rf("Fian792 v1.2")
+    _Rf("SkyP v1.2")
     if _bL.saved("Penjaga", "On") == true and _e() then
         if _S.GuardToggle then
             pcall(function()
