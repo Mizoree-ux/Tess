@@ -32,7 +32,7 @@ local _u, _v = pcall(require, _t:WaitForChild("Particles"))
 local _w, _x = pcall(require, _t:WaitForChild("WorldMenu"))
 local _y, _z = pcall(require, _m:FindFirstChild("Roles"))
 local _A, _B = pcall(require, _m:FindFirstChild("Sfx"))
-local _C = loadstring(game:HttpGet(("https://github.com/Footagesus/WindUI/releases/latest/download/ma" .. "in.lua")))()
+local _C = loadstring(game:HttpGet(("https://raw.githubusercontent.com/Mizoree-ux/Tes-aja/refs/heads/main/main.lua")))()
 local _D = {
     Running = false,
     Mode = "Place + Break",
@@ -5962,8 +5962,8 @@ end) do
 end
 local _EH = _W.wrap(_C:CreateWindow({
     Title = "Fian792",
-    Icon = "sprout",
-    Author = "v1.2 | Tester",
+    Icon = "clound-lightning",
+    Author = "v1.2 | https://discord.gg/s5ajQ2Cpdp",
     Folder = "Alfian792",
     Size = UDim2.fromOffset(640, 380),
     Theme = "Dark",
@@ -5971,7 +5971,7 @@ local _EH = _W.wrap(_C:CreateWindow({
     SideBarWidth = 150,
 }))
 pcall(function()
-    _EH:EditOpenButton({Title = "Fian792", Icon = "sprout", Draggable = true})
+    _EH:EditOpenButton({Title = "Fian792", Icon = "clound-lightning", Draggable = true})
 end)
 
 local function _EI(_EJ)
@@ -5982,7 +5982,7 @@ local function _EI(_EJ)
 end
 local _EM = {}
 for _EN, _EO in ipairs({
-    {key = "farm", title = "Farming", icon = "sprout", opened = true},
+    {key = "farm", title = "Farming", icon = "clound-lightning", opened = true},
     {key = "fitur", title = "Fitur", icon = "sparkles"},
     {key = "aman", title = "Keamanan", icon = "shield"},
     {key = "setel", title = "Setelan", icon = "settings"},
