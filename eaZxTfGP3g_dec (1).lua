@@ -5962,7 +5962,7 @@ end) do
 end
 local _EH = _W.wrap(_C:CreateWindow({
     Title = "SkyP",
-    Icon = "clound-lightning",
+    Icon = "cloud-lightning",
     Author = "v1.2 | https://discord.gg/s5ajQ2Cpdp",
     Folder = "AlSkyP",
     Size = UDim2.fromOffset(640, 380),
@@ -5971,7 +5971,7 @@ local _EH = _W.wrap(_C:CreateWindow({
     SideBarWidth = 150,
 }))
 pcall(function()
-    _EH:EditOpenButton({Title = "SkyP", Icon = "clound-lightning", Draggable = true})
+    _EH:EditOpenButton({Title = "SkyP", Icon = "cloud-lightning", Draggable = true})
 end)
 
 local function _EI(_EJ)
@@ -5982,7 +5982,7 @@ local function _EI(_EJ)
 end
 local _EM = {}
 for _EN, _EO in ipairs({
-    {key = "farm", title = "Farming", icon = "clound-lightning", opened = true},
+    {key = "farm", title = "Farming", icon = "cloud-lightning", opened = true},
     {key = "fitur", title = "Fitur", icon = "sparkles"},
     {key = "aman", title = "Keamanan", icon = "shield"},
     {key = "setel", title = "Setelan", icon = "settings"},
